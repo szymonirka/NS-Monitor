@@ -1,4 +1,5 @@
 from PyQt5.QtWidgets import QMainWindow, QTabWidget, QWidget, QVBoxLayout,QHBoxLayout, QLabel, QTextEdit, QPushButton
+from PyQt5.QtCore import QTimer
 from log_parser import get_logs
 from detector import detect_anomalies
 
@@ -15,6 +16,13 @@ class MainWindow(QMainWindow):
         tabs.addTab(self.logs_tab(), "Logs")
 
         self.setCentralWidget(tabs)
+
+        #timer
+        self.auto_refresh_interval_ms = 5000 
+        self.timer = QTimer(self)
+        self.timer.timeout.connect(self.auto_refresh)
+        self.timer.start(self.auto_refresh_interval_ms)
+
 
     def dashboard_tab(self):
         w = QWidget()
@@ -87,8 +95,12 @@ class MainWindow(QMainWindow):
     def refresh_alerts(self):
         logs = get_logs()
         alerts = detect_anomalies(logs)
-        self.alerts_text.setText("\n".join([str(a) for a in alerts]))
-        self.alert_count_label.setText(str(len(alerts)))
+        lines = [f"{a['type']}: {a['message']}" for a in alerts]
+        self.alerts_text.setText("\n".join(lines))
+
+        #if label exist
+        if hasattr(self, "alert_count_label"):
+            self.alert_count_label.setText(str(len(alerts)))
     
     def refresh_stats(self):
         logs = get_logs()
@@ -96,7 +108,10 @@ class MainWindow(QMainWindow):
 
         # Updatable stats
         failed = sum("Failed password" in line for line in logs)
-        sudo = sum("sudo" in line and "failure" in line for line in logs)
+        sudo = sum(
+        ("sudo" in line and "authentication failure" in line) or
+        ("sudo" in line and "incorrect password" in line)
+        for line in logs)
         firewall = sum("UFW BLOCK" in line or "iptables" in line for line in logs)
         network = sum("error" in line.lower() for line in logs)
 
@@ -105,18 +120,40 @@ class MainWindow(QMainWindow):
         self.firewall_label.setText(f"Firewall Blocks: {firewall}")
         self.network_label.setText(f"Network Errors: {network}")
 
+    def auto_refresh(self):
+        """
+        Periodically refresh logs, alerts and stats.
+        Called automatically by QTimer.
+        """
+        try:
+            self.refresh_logs()
+            self.refresh_alerts()
+            self.refresh_stats()
+        except Exception as e:
+            # Optional: show simple error info in alerts tab instead of crashing
+            if hasattr(self, "alerts_text"):
+                self.alerts_text.append(f"\n[auto-refresh error] {e}")
+
+
 
     def export_json_report(self):
-        from report_exporter import export_json
-        logs = get_logs()
-        alerts = detect_anomalies(logs)
-        export_json(alerts)
-        self.alerts_text.append("\n[+] JSON report exported")
+        try:
+            from report_exporter import export_json
+            logs = get_logs()
+            alerts = detect_anomalies(logs)
+            export_json(alerts)
+            self.alerts_text.append("\n[+] JSON report exported")
+        except Exception as e:
+            self.alerts_text.append(f"\n[ERROR exporting PDF] {e}")
+
 
     def export_pdf_report(self):
-        from report_exporter import export_pdf
-        logs = get_logs()
-        alerts = detect_anomalies(logs)
-        export_pdf(alerts)
-        self.alerts_text.append("\n[+] PDF report exported")
+        try:
+            from report_exporter import export_pdf
+            logs = get_logs()
+            alerts = detect_anomalies(logs)
+            export_pdf(alerts)
+            self.alerts_text.append("\n[+] PDF report exported")
+        except Exception as e:
+            self.alerts_text.append(f"\n[ERROR exporting PDF] {e}")
 

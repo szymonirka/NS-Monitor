@@ -1,0 +1,4 @@
+automatyczne refreshowwanie
+poprawić logi
+poprawić eksport logów
+sprawdzić czy to parsowanie logów napewno działa
