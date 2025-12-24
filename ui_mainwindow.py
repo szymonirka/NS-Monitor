@@ -1,4 +1,4 @@
-from PyQt5.QtWidgets import QMainWindow, QTabWidget, QWidget, QVBoxLayout,QHBoxLayout, QLabel, QTextEdit, QPushButton
+from PyQt5.QtWidgets import QMainWindow, QTabWidget, QWidget, QVBoxLayout,QHBoxLayout, QLabel, QTextEdit, QPushButton, QFileDialog
 from PyQt5.QtCore import QTimer
 from log_parser import get_logs
 from detector import detect_anomalies
@@ -85,6 +85,18 @@ class MainWindow(QMainWindow):
         refresh_btn = QPushButton("Refresh Logs")
         refresh_btn.clicked.connect(self.refresh_logs)
         layout.addWidget(refresh_btn)
+
+        btn_layout = QHBoxLayout()
+
+        export_logs_json_btn = QPushButton("Export Logs (JSON)")
+        export_logs_json_btn.clicked.connect(self.export_logs_json)
+        btn_layout.addWidget(export_logs_json_btn)
+
+        export_logs_pdf_btn = QPushButton("Export Logs (PDF)")
+        export_logs_pdf_btn.clicked.connect(self.export_logs_pdf)
+        btn_layout.addWidget(export_logs_pdf_btn)
+
+        layout.addLayout(btn_layout)
         w.setLayout(layout)
         return w
 
@@ -137,23 +149,92 @@ class MainWindow(QMainWindow):
 
 
     def export_json_report(self):
+        
+        from report_exporter import export_json
+        logs = get_logs()
+        alerts = detect_anomalies(logs)
+
+        path, _ = QFileDialog.getSaveFileName(
+            self,
+            "Save JSON Report",
+            "",
+            "JSON Files (*.json);;All Files (*)"
+        )
+
+        if not path:  #cancelled
+            return
+
         try:
-            from report_exporter import export_json
-            logs = get_logs()
-            alerts = detect_anomalies(logs)
-            export_json(alerts)
-            self.alerts_text.append("\n[+] JSON report exported")
+            export_json(alerts, filename=path)
+            self.alerts_text.append(f"\n[+] JSON report exported to: {path}")
         except Exception as e:
             self.alerts_text.append(f"\n[ERROR exporting PDF] {e}")
 
 
     def export_pdf_report(self):
+        
+        from report_exporter import export_pdf
+        logs = get_logs()
+        alerts = detect_anomalies(logs)
+
+        path, _ = QFileDialog.getSaveFileName(
+            self,
+            "Save PDF Report",
+            "",
+            "PDF Files (*.pdf);;All Files (*)"
+        )
+
+        if not path:  #cancelled
+            return
         try:
-            from report_exporter import export_pdf
-            logs = get_logs()
-            alerts = detect_anomalies(logs)
-            export_pdf(alerts)
-            self.alerts_text.append("\n[+] PDF report exported")
+            export_pdf(alerts, filename=path)
+            self.alerts_text.append(f"\n[+] PDF report exported to: {path}")
         except Exception as e:
             self.alerts_text.append(f"\n[ERROR exporting PDF] {e}")
+
+    def export_logs_json(self):
+       from report_exporter import export_json_logs
+
+       logs = get_logs() 
+
+       path, _ = QFileDialog.getSaveFileName(
+           self,
+            "Save Logs (JSON)",
+            "",
+            "JSON Files (*.json);;All Files (*)"
+
+       )
+
+       if not path:
+           return
+       
+       try:
+           export_json_logs(logs, filename=path)
+           self.logs_text.append(f"\n[+] Logs exported to JSON: {path}")
+       except Exception as e:
+           self.logs_text.append(f"\n[ERROR exporting logs JSON] {e}")
+
+    def export_logs_pdf(self):
+        from report_exporter import export_pdf_logs
+
+        logs = get_logs()
+
+        path, _ = QFileDialog.getSaveFileName(
+            self,
+            "Save Logs (PDF)",
+            "",
+            "PDF Files (*.pdf);;All Files (*)"
+        )
+
+        if not path:
+            return
+
+        try:
+            export_pdf_logs(logs, filename=path)
+            self.logs_text.append(f"\n[+] Logs exported to PDF: {path}")
+        except Exception as e:
+            self.logs_text.append(f"\n[ERROR exporting logs PDF] {e}")
+
+
+           
 
