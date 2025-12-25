@@ -18,7 +18,7 @@ class MainWindow(QMainWindow):
         self.setCentralWidget(tabs)
 
         #timer
-        self.auto_refresh_interval_ms = 5000 
+        self.auto_refresh_interval_ms = 2000 
         self.timer = QTimer(self)
         self.timer.timeout.connect(self.auto_refresh)
         self.timer.start(self.auto_refresh_interval_ms)
