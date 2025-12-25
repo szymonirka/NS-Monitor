@@ -1,16 +1,116 @@
-from PyQt5.QtWidgets import QMainWindow, QTabWidget, QWidget, QVBoxLayout,QHBoxLayout, QLabel, QTextEdit, QPushButton, QFileDialog
+from PyQt5.QtWidgets import QMainWindow, QTabWidget, QWidget, QVBoxLayout,QHBoxLayout, QLabel, QDialog, QTextEdit, QPushButton, QFileDialog
 from PyQt5.QtCore import QTimer
 import re
 from collections import defaultdict
 from log_parser import get_logs
-from detector import detect_anomalies
+from detector import detect_anomalies, is_network_error_line
 
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
 
+        self.setStyleSheet("""
+            QMainWindow {
+                background-color: #121212;
+            }
+
+            QWidget {
+                background-color: #121212;
+                color: #e0e0e0;
+                font-family: Segoe UI, Arial;
+                font-size: 13px;
+            }
+
+            QLabel {
+                color: #e0e0e0;
+                font-size: 14px;
+            }
+
+            QTabWidget::pane {
+                border: 1px solid #333333;
+                background: #181818;
+            }
+
+            QTabBar::tab {
+                background: #1f1f1f;
+                color: #b0b0b0;
+                padding: 6px 18px;
+                border-top-left-radius: 8px;
+                border-top-right-radius: 8px;
+                margin-right: 3px;
+            }
+
+            QTabBar::tab:selected {
+                background: #2c89d9;
+                color: #ffffff;
+            }
+
+            QTabBar::tab:hover {
+                background: #2f2f2f;
+            }
+
+            QPushButton {
+                background-color: #2c89d9;
+                color: #ffffff;
+                border-radius: 6px;
+                padding: 6px 12px;
+                border: 1px solid #1b6fb8;
+            }
+
+            QPushButton:hover {
+                background-color: #1b6fb8;
+            }
+
+            QPushButton:pressed {
+                background-color: #155a96;
+            }
+
+            QTextEdit {
+                background: #1e1e1e;
+                color: #e0e0e0;
+                border: 1px solid #333333;
+                border-radius: 6px;
+                padding: 6px;
+            }
+
+            QLineEdit {
+                background: #1e1e1e;
+                color: #e0e0e0;
+                border: 1px solid #333333;
+                border-radius: 4px;
+                padding: 4px;
+            }
+
+            QDialog {
+                background-color: #121212;
+            }
+
+            QScrollBar:vertical {
+                background: #1e1e1e;
+                width: 10px;
+                margin: 2px 0 2px 0;
+            }
+
+            QScrollBar::handle:vertical {
+                background: #444444;
+                min-height: 20px;
+                border-radius: 4px;
+            }
+
+            QScrollBar::handle:vertical:hover {
+                background: #555555;
+            }
+
+            QScrollBar::add-line:vertical,
+            QScrollBar::sub-line:vertical {
+                height: 0;
+            }
+        """)
+
+
         self.setWindowTitle("Local Network Security Monitoring System")
         self.resize(900, 600)
+
 
         tabs = QTabWidget()
         tabs.addTab(self.dashboard_tab(), "Dashboard")
@@ -32,16 +132,59 @@ class MainWindow(QMainWindow):
 
         layout.addWidget(QLabel("<h2>System Monitoring Dashboard</h2>"))
 
-        self.failed_label = QLabel("Failed SSH Attempts: 0")
-        self.sudo_label = QLabel("Sudo Failures: 0")
-        self.firewall_label = QLabel("Firewall Blocks: 0")
-        self.network_label = QLabel("Network Errors: 0")
+        card_style = """
+            background-color: #1b1b1b;
+            border: 1px solid #333333;
+            border-radius: 10px;
+            padding: 12px 16px;
+            margin-bottom: 12px;
+            font-size: 15px;
+            font-weight: 500;
+        """
 
+
+        # Counters
+        self.failed_label = QLabel("Failed SSH Attempts: 0")
+        self.failed_label.setStyleSheet(card_style)
+
+        self.sudo_label = QLabel("Sudo Failures: 0")
+        self.sudo_label.setStyleSheet(card_style)
+
+        self.firewall_label = QLabel("Firewall Blocks: 0")
+        self.firewall_label.setStyleSheet(card_style)
+
+        self.network_label = QLabel("Network Errors: 0")
+        self.network_label.setStyleSheet(card_style)
+        
         layout.addWidget(self.failed_label)
         layout.addWidget(self.sudo_label)
         layout.addWidget(self.firewall_label)
         layout.addWidget(self.network_label)
 
+
+        # --- Details buttons row ---
+        btn_layout = QHBoxLayout()
+
+        ssh_btn = QPushButton("Show SSH Failures")
+        ssh_btn.clicked.connect(self.show_ssh_failures)
+        btn_layout.addWidget(ssh_btn)
+
+        sudo_btn = QPushButton("Show Sudo Failures")
+        sudo_btn.clicked.connect(self.show_sudo_failures)
+        btn_layout.addWidget(sudo_btn)
+
+        fw_btn = QPushButton("Show Firewall Blocks")
+        fw_btn.clicked.connect(self.show_firewall_blocks)
+        btn_layout.addWidget(fw_btn)
+
+        net_btn = QPushButton("Show Network Errors")
+        net_btn.clicked.connect(self.show_network_errors)
+        btn_layout.addWidget(net_btn)
+
+        layout.addLayout(btn_layout)
+        # ---------------------------
+
+        # Refresh button
         refresh_btn = QPushButton("Refresh Stats")
         refresh_btn.clicked.connect(self.refresh_stats)
         layout.addWidget(refresh_btn)
@@ -126,11 +269,11 @@ class MainWindow(QMainWindow):
         for line in logs:
             if "sudo" in line:
                 if "incorrect password attempts" in line:
-                    m = re.search(r"(\d+)\s+incorrect password attempts", line)
+                    m = re.search(r"(\d+)\s+incorrect password attempts", line) # sudo
                     n = int(m.group(1)) if m else 1
                     sudo += 1
         firewall = sum("UFW BLOCK" in line or "iptables" in line for line in logs) #firewall
-        network = sum("error" in line.lower() for line in logs) #network errors
+        network = sum(is_network_error_line(line) for line in logs) #network errors
 
         self.failed_label.setText(f"Failed SSH Attempts: {failed}")
         self.sudo_label.setText(f"Sudo Failures: {sudo}")
@@ -240,8 +383,40 @@ class MainWindow(QMainWindow):
         except Exception as e:
             self.logs_text.append(f"\n[ERROR exporting logs PDF] {e}")
 
+    def show_details(self, title, lines):
+        dlg = QDialog(self)
+        dlg.setWindowTitle(title)
+        dlg.resize(700, 500)
+
+        layout = QVBoxLayout()
+        text = QTextEdit()
+        text.setReadOnly(True)
+        text.setText("\n".join(lines))
+        layout.addWidget(text)
+
+        dlg.setLayout(layout)
+        dlg.exec_()
 
            
+    def show_ssh_failures(self):
+        logs = get_logs()
+        lines = [l for l in logs if "Failed password" in l]
+        self.show_details("Failed SSH Attempts", lines)
+
+    def show_sudo_failures(self):
+        logs = get_logs()
+        lines = [l for l in logs if "sudo" in l and ("authentication failure" in l or "incorrect password attempts" in l)]
+        self.show_details("Sudo Authentication Failures", lines)
+
+    def show_firewall_blocks(self):
+        logs = get_logs()
+        lines = [l for l in logs if "UFW BLOCK" in l or "iptables" in l or "Denied" in l]
+        self.show_details("Firewall Block Events", lines)
+
+    def show_network_errors(self):
+        logs = get_logs()
+        lines = [l for l in logs if is_network_error_line(l)]
+        self.show_details("Network Errors", lines)
 
 
 

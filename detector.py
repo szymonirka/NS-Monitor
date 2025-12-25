@@ -1,6 +1,26 @@
 import re
 from collections import Counter, defaultdict
 
+
+def is_network_error_line(line: str) -> bool:
+
+    l = line.lower()
+    keywords = [
+                "link is down",
+        "link down",
+        "network unreachable",
+        "no route to host",
+        "destination host unreachable",
+        "connection refused",
+        "connection timed out",
+        "temporary failure in name resolution",
+        "network is unreachable",
+        "dns failure",
+        "network error",
+        "net-error-test", # test
+    ]
+    return any(k in l for k in keywords)
+
 def detect_anomalies(logs):
     alerts = []
 
@@ -40,7 +60,7 @@ def detect_anomalies(logs):
             firewall_blocks.append(line)
         
         #network error
-        if "link is down" in line or "error" in line:
+        if is_network_error_line(line):
             iface_errors.append(line)
 
     #--------rules------------
