@@ -1,5 +1,7 @@
 from PyQt5.QtWidgets import QMainWindow, QTabWidget, QWidget, QVBoxLayout,QHBoxLayout, QLabel, QTextEdit, QPushButton, QFileDialog
 from PyQt5.QtCore import QTimer
+import re
+from collections import defaultdict
 from log_parser import get_logs
 from detector import detect_anomalies
 
@@ -119,13 +121,16 @@ class MainWindow(QMainWindow):
         alerts = detect_anomalies(logs)
 
         # Updatable stats
-        failed = sum("Failed password" in line for line in logs)
-        sudo = sum(
-        ("sudo" in line and "authentication failure" in line) or
-        ("sudo" in line and "incorrect password" in line)
-        for line in logs)
-        firewall = sum("UFW BLOCK" in line or "iptables" in line for line in logs)
-        network = sum("error" in line.lower() for line in logs)
+        failed = sum("Failed password" in line for line in logs) #ssh
+        sudo = 0
+        for line in logs:
+            if "sudo" in line:
+                if "incorrect password attempts" in line:
+                    m = re.search(r"(\d+)\s+incorrect password attempts", line)
+                    n = int(m.group(1)) if m else 1
+                    sudo += 1
+        firewall = sum("UFW BLOCK" in line or "iptables" in line for line in logs) #firewall
+        network = sum("error" in line.lower() for line in logs) #network errors
 
         self.failed_label.setText(f"Failed SSH Attempts: {failed}")
         self.sudo_label.setText(f"Sudo Failures: {sudo}")
@@ -142,7 +147,7 @@ class MainWindow(QMainWindow):
             self.refresh_alerts()
             self.refresh_stats()
         except Exception as e:
-            # Optional: show simple error info in alerts tab instead of crashing
+            
             if hasattr(self, "alerts_text"):
                 self.alerts_text.append(f"\n[auto-refresh error] {e}")
 
@@ -237,4 +242,6 @@ class MainWindow(QMainWindow):
 
 
            
+
+
 

@@ -8,6 +8,7 @@ def detect_anomalies(logs):
 
     failed_ssh = []
     sudo_failures = []
+    sudo_failure_count = 0  
     firewall_blocks = []
     iface_errors = []
     connection_attempts = defaultdict(int)
@@ -25,8 +26,14 @@ def detect_anomalies(logs):
                 connection_attempts[ip] += 1
         
         #Sudo failure
-        if "sudo" in line and ("authentication failure" in line or "incorrect password" in line):
-            sudo_failures.append(line)
+        if "sudo" in line:
+            # Case 1: summary line like "sudo: 3 incorrect password attempts"
+            if "incorrect password attempts" in line:
+                m = re.search(r"(\d+)\s+incorrect password attempts", line)
+                n = int(m.group(1)) if m else 1
+                sudo_failure_count += n
+                sudo_failures.append(f"{line} [counted {n} attempts]")
+
 
         #firewall 
         if "UFW BLOCK" in line or "Denied" in line or "iptables" in line:
@@ -53,7 +60,7 @@ def detect_anomalies(logs):
                 "message": f"IP {ip} attempted {count} failed logins"
             })
     #3 too many sudo failures
-    if len(sudo_failures) > 3:
+    if len(sudo_failures) > 2:
         alerts.append({
             "type": "Privilege Escalation Attempt",
             "message": f"{len(sudo_failures)} failed sudo authentication attempts"    
