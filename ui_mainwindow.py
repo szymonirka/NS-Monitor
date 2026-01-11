@@ -108,6 +108,9 @@ class MainWindow(QMainWindow):
             }
         """)
 
+        # Keep timestamps for alerts so they don't "refresh" every second
+        self.alert_first_seen = {}   # key -> timestamp string
+        self.last_alert_keys = set() # used to detect changes
 
         self.setWindowTitle("Local Network Security Monitoring System")
         self.resize(900, 600)
@@ -249,16 +252,37 @@ class MainWindow(QMainWindow):
     def refresh_alerts(self):
         logs = get_logs()
         alerts = detect_anomalies(logs)
-        lines = []
+
+        # Build stable keys (same alert = same key)
+        current_keys = set()
         for a in alerts:
-            ts = a.get("timestamp") or datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-            lines.append(f"[{ts}] {a['type']}: {a['message']}")
+            key = (a.get("type", ""), a.get("message", ""))
+            current_keys.add(key)
+
+            # Assign timestamp only the first time we see this alert key
+            if key not in self.alert_first_seen:
+                self.alert_first_seen[key] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+        # Remove timestamps for alerts that disappeared (optional)
+        # If you want to keep history, comment this block out.
+        for old_key in list(self.alert_first_seen.keys()):
+            if old_key not in current_keys:
+                del self.alert_first_seen[old_key]
+
+        # If nothing changed, don't update the UI (prevents flicker)
+        if current_keys == self.last_alert_keys:
+            return
+        self.last_alert_keys = current_keys
+
+        # Format output
+        lines = []
+        for key in sorted(current_keys, key=lambda k: self.alert_first_seen[k]):
+            ts = self.alert_first_seen[key]
+            alert_type, msg = key
+            lines.append(f"[{ts}] {alert_type}: {msg}")
 
         self.alerts_text.setText("\n".join(lines))
 
-        #if label exist
-        if hasattr(self, "alert_count_label"):
-            self.alert_count_label.setText(str(len(alerts)))
     
     def refresh_stats(self):
         logs = get_logs()
