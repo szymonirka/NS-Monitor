@@ -4,6 +4,7 @@ import re
 from collections import defaultdict
 from log_parser import get_logs
 from detector import detect_anomalies, is_network_error_line
+from datetime import datetime 
 
 class MainWindow(QMainWindow):
     def __init__(self):
@@ -120,7 +121,7 @@ class MainWindow(QMainWindow):
         self.setCentralWidget(tabs)
 
         #timer
-        self.auto_refresh_interval_ms = 2000 
+        self.auto_refresh_interval_ms = 1000 
         self.timer = QTimer(self)
         self.timer.timeout.connect(self.auto_refresh)
         self.timer.start(self.auto_refresh_interval_ms)
@@ -184,10 +185,6 @@ class MainWindow(QMainWindow):
         layout.addLayout(btn_layout)
         # ---------------------------
 
-        # Refresh button
-        refresh_btn = QPushButton("Refresh Stats")
-        refresh_btn.clicked.connect(self.refresh_stats)
-        layout.addWidget(refresh_btn)
 
         w.setLayout(layout)
         return w
@@ -252,7 +249,11 @@ class MainWindow(QMainWindow):
     def refresh_alerts(self):
         logs = get_logs()
         alerts = detect_anomalies(logs)
-        lines = [f"{a['type']}: {a['message']}" for a in alerts]
+        lines = []
+        for a in alerts:
+            ts = a.get("timestamp") or datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            lines.append(f"[{ts}] {a['type']}: {a['message']}")
+
         self.alerts_text.setText("\n".join(lines))
 
         #if label exist
