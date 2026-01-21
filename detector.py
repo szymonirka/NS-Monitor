@@ -47,7 +47,7 @@ def detect_anomalies(logs):
         
         #Sudo failure
         if "sudo" in line:
-            # Case 1: summary line like "sudo: 3 incorrect password attempts"
+            
             if "incorrect password attempts" in line:
                 m = re.search(r"(\d+)\s+incorrect password attempts", line)
                 n = int(m.group(1)) if m else 1
@@ -63,37 +63,37 @@ def detect_anomalies(logs):
         if is_network_error_line(line):
             iface_errors.append(line)
 
-    #--------rules------------
-    #1. to many failed ssh attempts
+    #--------zasady------------
 
+    #1. zbyt dużo prób połączenia ssh
     if len(failed_ssh) > 5:
         alerts.append({
             "type" : "Brute Force",
             "message": f"{len(failed_ssh)} failed SSH login attempts detected"
         })
 
-    #2 Repeated attempts from a single IP
+    #2 powtórzone próby z adresu IP
     for ip, count in connection_attempts.items():
         if count > 3:
             alerts.append({
                 "type": "Suspicious IP activity",
                 "message": f"IP {ip} attempted {count} failed logins"
             })
-    #3 too many sudo failures
+    #3 zbyt dużo prób logowań na root
     if len(sudo_failures) > 2:
         alerts.append({
             "type": "Privilege Escalation Attempt",
             "message": f"{len(sudo_failures)} failed sudo authentication attempts"    
         })
 
-  # 4. Firewall blocked packets
+  # 4. blokwane pakiety przez firewall
     if len(firewall_blocks) > 0:
         alerts.append({
             "type": "Firewall Blocks",
             "message": f"{len(firewall_blocks)} packets blocked by firewall"
         })
 
-    # 5. Network interface errors
+    # 5. problemy z interfejsem sieciowym
     if len(iface_errors) > 0:
         alerts.append({
             "type": "Network Interface Errors",
